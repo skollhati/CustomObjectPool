@@ -18,9 +18,10 @@ template<typename T>
 class CustomObjectPool
 {
 public:
-	static CustomObjectPool& instance(int nSize, int maxSize, std::function<T& (T*)> gMethod, std::function<T& (T*)> resetMethod) {
+	static CustomObjectPool& instance(int nSize, int maxSize, std::function<T* (T*)> gMethod, std::function<T* (T*)> resetMethod) {
 		//C++11에서는 정적 지역 변수 초기화 코드가 멀티스레드 환경에서도 딱 한번 실행
 		//thread-safe
+		
 		static CustomObjectPool* instance = new CustomObjectPool(nSize,maxSize, gMethod, resetMethod);
 		
 		return *instance;
@@ -36,7 +37,7 @@ public:
 					boost::lock_guard<boost::mutex> lock(oMutex);
 					existObjectCnt++;
 				}
-				return mGMethod(new T());
+				return mGMethod(new T);
 			}
 			else {
 				
@@ -54,7 +55,7 @@ public:
 						else if (existObjectCnt < mMaxSize)
 						{
 							existObjectCnt++;
-							return mGMethod(new T());
+							return mGMethod(new T);
 						}
 						
 					}
@@ -77,7 +78,7 @@ public:
 		{
 			boost::lock_guard<boost::mutex> lock(oMutex);
 			if (pool.size() < mSize)
-				pool.push(object);
+				pool.push(mResetMethod(object));
 			else {
 				delete object;
 				existObjectCnt--;
@@ -89,19 +90,21 @@ private:
 	CustomObjectPool() = default;
 	
 	//매개변수 : 기본크기, 최대크기, 오브젝트 세팅 함수 포인터, 오브젝트 초기화 함수 포인터
-	CustomObjectPool(int nSize,int maxSize,std::function<T& (T*)> gMethod, std::function<T& (T*)> resetMethod)
-		:mSize(nSize),mMaxSize(maxSize),mGMethod(gMethod),mResetMethod(resetMethod)
+	CustomObjectPool(int nSize,int maxSize,std::function<T* (T*)> gMethod, std::function<T* (T*)> resetMethod)
+		:mSize(nSize),mMaxSize(maxSize),mResetMethod(resetMethod),mGMethod(gMethod)
 	{
-		for (int i = 0; i < nSize; i++)
+		
+		for (int i = 0; i < mSize; i++)
 		{
-			q.push(gMethod(new T()));
+			pool.push(mGMethod(new T));
 		}
+		
 	}
 
-	std::queue<T> pool;
+	std::queue<T*> pool;
 	int mSize, mMaxSize;
 	int existObjectCnt;
 	boost::mutex oMutex;
-	std::function<T& (T*)> mGMethod;
-	std::function<T& (T*)> mResetMethod;
+	std::function<T* (T*)> mGMethod;
+	std::function<T* (T*)> mResetMethod;
 };
